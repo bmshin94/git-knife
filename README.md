@@ -50,6 +50,60 @@ pnpm tauri build
 > PNG with `pnpm tauri icon path/to/icon.png`, which populates
 > `src-tauri/icons/`. Dev runs don't need this.
 
+## Editing history & pushing
+
+### Edit a commit
+
+1. **Open** a repository (Browse… or paste the path).
+2. Click any **non-merge** commit to expand its editor.
+3. Change the message, author/committer name, email, or dates. Edited rows are
+   highlighted; the date fields keep the commit's original UTC offset.
+4. Click **Review & apply**, check the old → new preview, and confirm.
+
+git-knife rewrites **only your local branch**. It never contacts a remote and
+never pushes for you — pushing is always your explicit step.
+
+### Push a rewrite
+
+Editing a commit changes its hash **and the hash of every commit after it**, so
+your local branch and the remote have diverged. A normal `git push` is rejected
+as *non-fast-forward*. Push with a lease:
+
+```bash
+git push --force-with-lease origin <branch>
+```
+
+`--force-with-lease` refuses the push if the remote moved since your last fetch,
+so you can't silently clobber a teammate's commits. Prefer it over plain
+`--force`, which skips that safety check.
+
+> git-knife shows a **"rewrites pushed history"** warning when your edit reaches
+> into commits that already exist on the upstream. If you can, edit only unpushed
+> commits — rewriting shared history forces everyone else to re-sync.
+
+### After rewriting shared history
+
+Anyone who already pulled the old commits now has divergent history. Each of them
+re-syncs their local branch to the new remote state:
+
+```bash
+git fetch origin
+git reset --hard origin/<branch>   # discards local-only commits — coordinate first
+```
+
+### Undo a rewrite
+
+- **In-app:** the **Backups** panel restores the pre-rewrite tip in one click.
+- **From the CLI:** every apply saved a backup ref —
+
+  ```bash
+  git for-each-ref refs/knife-backup      # find the pre-rewrite tip
+  git reset --hard <backup-ref-or-hash>   # move the branch back
+  ```
+
+  `git reflog` also lists the old tip. If you already force-pushed, restore
+  locally and then `git push --force-with-lease` again.
+
 ## How it works
 
 - `src-tauri/src/git.rs` — the only place that spawns `git`.
