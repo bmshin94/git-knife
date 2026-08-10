@@ -13,6 +13,26 @@ It never reimplements git — it shells out to the system `git` CLI and rebuilds
 commits with `git commit-tree`, reusing each commit's original tree so **file
 contents are provably never changed**.
 
+## How it compares
+
+| Tool | Clean GUI | Reword msg | Reorder / squash / drop | Edit **author date** | Edit **committer date** | Edit author/email | Bulk find & replace (regex) |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| **git-knife** | ✅ | ✅ | 🚧 planned | ✅ | ✅ | ✅ | ✅ |
+| GitKraken | ✅ | ✅ | ✅ | ⚠️ amend-only | ❌ | ⚠️ | ❌ |
+| Sublime Merge | ✅ | ✅ | ✅ | ❌ | ❌ | ⚠️ amend | ❌ |
+| Fork | ✅ | ✅ | ✅ | ❌ | ❌ | ⚠️ | ❌ |
+| SmartGit | ✅ | ✅ | ✅ | ⚠️ | ❌ | ✅ | ❌ |
+| git-cola | ◐ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| lazygit (TUI) | ◐ TUI | ✅ | ✅ | ❌ | ❌ | ⚠️ | ❌ |
+| git-filter-repo (CLI) | ❌ | ✅ | via callback | ✅ | ✅ | ✅ | ✅ |
+
+Legend: ✅ first-class · ⚠️ possible but awkward/limited · ◐ dated or terminal UI · ❌ not supported · 🚧 planned.
+
+The polished GUIs reword and reorder well but treat commit **dates** — especially
+the committer date — as effectively immutable, and none offer a bulk regex pass
+over author identity. The tools that *can* rewrite that metadata have no GUI.
+git-knife is the intersection: a clean GUI that edits every field, in bulk, safely.
+
 ## Status (MVP)
 
 - ✅ Open a repo, list commits on the current branch
@@ -47,9 +67,23 @@ The first `cargo` build downloads and compiles the Tauri crates (a few minutes).
 pnpm tauri build
 ```
 
-> Packaging (`tauri build`) needs app icons. Generate them once from any square
-> PNG with `pnpm tauri icon path/to/icon.png`, which populates
-> `src-tauri/icons/`. Dev runs don't need this.
+> Packaging (`tauri build`) needs app icons. They're already committed under
+> `src-tauri/icons/`; regenerate from any square PNG with
+> `pnpm tauri icon path/to/icon.png`. Dev runs don't need them.
+
+### Automated releases (GitHub Actions)
+
+`.github/workflows/release.yml` builds native installers for **macOS, Linux, and
+Windows** with [`tauri-action`](https://github.com/tauri-apps/tauri-action) and
+attaches them to a draft GitHub Release. Cut a release by pushing a tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+(or trigger it manually from the repo's **Actions** tab). No code signing is set
+up yet, so macOS/Windows builds are unsigned — fine for early testers.
 
 ## Editing history & pushing
 
