@@ -161,11 +161,16 @@ textarea {
 
 .repo-info {
   display: flex;
+  align-items: center;
   gap: 22px;
   padding: 8px 18px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   font-size: 0.9rem;
+}
+.sign-toggle {
+  margin-left: auto;
+  font-size: 0.85rem;
 }
 
 .banner {

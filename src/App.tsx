@@ -35,6 +35,15 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulk, setBulk] = useState<BulkSpec>(emptyBulkSpec);
+  // Transparent signature note on rewrites — on by default, persisted, opt-out.
+  const [sign, setSign] = useState<boolean>(
+    () => localStorage.getItem("knife.sign") !== "0"
+  );
+
+  function toggleSign(next: boolean) {
+    setSign(next);
+    localStorage.setItem("knife.sign", next ? "1" : "0");
+  }
 
   const dirtyCount = Object.keys(edits).length;
 
@@ -183,13 +192,14 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const res = await applyEdits(repo.path, Object.values(edits));
+      const res = await applyEdits(repo.path, Object.values(edits), sign);
       setConfirm(null);
       setEdits({});
       setExpanded(null);
       setNotice(
         `Rewrote ${res.rewrittenCount} commit${res.rewrittenCount === 1 ? "" : "s"}. ` +
-          `New HEAD ${res.newHead.slice(0, 8)} · backup ${res.backupRef}`
+          `New HEAD ${res.newHead.slice(0, 8)} · backup ${res.backupRef}` +
+          (sign ? " · signed with a git-knife note" : "")
       );
       const info = await openRepo(repo.path);
       setRepo(info);
@@ -272,6 +282,17 @@ export default function App() {
               <span className="muted">none</span>
             )}
           </span>
+          <label
+            className="chk sign-toggle"
+            title="Attach a transparent git-knife note (refs/notes/git-knife) to rewritten commits. Read it with: git notes --ref=git-knife show <commit>"
+          >
+            <input
+              type="checkbox"
+              checked={sign}
+              onChange={(e) => toggleSign(e.target.checked)}
+            />
+            🔪 signature note
+          </label>
         </div>
       )}
 

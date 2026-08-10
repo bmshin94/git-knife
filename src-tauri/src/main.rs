@@ -26,8 +26,12 @@ fn preview_edits(path: String, edits: Vec<CommitEdit>) -> Result<Vec<FieldChange
 }
 
 #[tauri::command]
-fn apply_edits(path: String, edits: Vec<CommitEdit>) -> Result<ApplyResult, String> {
-    rewrite::apply_edits(&path, &edits)
+fn apply_edits(
+    path: String,
+    edits: Vec<CommitEdit>,
+    sign: bool,
+) -> Result<ApplyResult, String> {
+    rewrite::apply_edits(&path, &edits, sign)
 }
 
 #[tauri::command]

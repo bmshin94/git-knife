@@ -156,6 +156,24 @@ git reset --hard origin/<branch>   # discards local-only commits — coordinate 
   `git reflog` also lists the old tip. If you already force-pushed, restore
   locally and then `git push --force-with-lease` again.
 
+### Signature note (transparent)
+
+By default git-knife attaches a small, **disclosed** note to each rewritten tip
+commit, on its own notes ref so it never touches your regular notes:
+
+```bash
+git notes --ref=git-knife show <commit>   # read it
+git for-each-ref refs/notes/git-knife      # was this repo edited by git-knife?
+```
+
+It's invisible in a normal `git log` (separate ref) but fully discoverable — no
+hidden encoding. Toggle it off anytime with the **🔪 signature note** checkbox in
+the app (the setting is remembered). To strip it from a repo entirely:
+
+```bash
+git update-ref -d refs/notes/git-knife
+```
+
 ## How it works
 
 - `src-tauri/src/git.rs` — the only place that spawns `git`.

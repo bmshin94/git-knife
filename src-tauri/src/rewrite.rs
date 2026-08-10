@@ -210,8 +210,38 @@ pub fn preview_edits(path: &str, edits: &[CommitEdit]) -> Result<Vec<FieldChange
     Ok(changes)
 }
 
+/// Notes ref used for the (optional, transparent) git-knife signature.
+const NOTES_REF: &str = "refs/notes/git-knife";
+
+/// Attach a signature note to the rewritten tip. Uses a dedicated notes ref so
+/// it never touches the user's default notes. Best-effort — callers ignore the
+/// result so a notes failure never fails the rewrite itself.
+fn add_signature(repo: &str, commit: &str, count: u32) -> Result<(), String> {
+    let msg = format!(
+        "Rewritten with git-knife 🔪 ({count} commit{}).\n\
+         https://github.com/TheRealYT/git-knife",
+        if count == 1 { "" } else { "s" }
+    );
+    git::run(
+        repo,
+        &[
+            "notes",
+            &format!("--ref={NOTES_REF}"),
+            "add",
+            "-f",
+            "-m",
+            &msg,
+            commit,
+        ],
+        &[],
+        None,
+    )?;
+    Ok(())
+}
+
 /// Apply edits: rebuild the chain, save a backup ref, then move the branch.
-pub fn apply_edits(path: &str, edits: &[CommitEdit]) -> Result<ApplyResult, String> {
+/// When `sign` is set, a transparent signature note is attached to the new tip.
+pub fn apply_edits(path: &str, edits: &[CommitEdit], sign: bool) -> Result<ApplyResult, String> {
     let info = commits::open_repo(path)?;
     let repo = info.path.as_str();
     let head = info.head.clone();
@@ -294,6 +324,11 @@ pub fn apply_edits(path: &str, edits: &[CommitEdit]) -> Result<ApplyResult, Stri
     } else {
         let refname = format!("refs/heads/{branch}");
         git::run(repo, &["update-ref", &refname, &new_head, &head], &[], None)?;
+    }
+
+    // Optional, transparent signature note. Best-effort: never fail the rewrite.
+    if sign {
+        let _ = add_signature(repo, &new_head, (oldest + 1) as u32);
     }
 
     Ok(ApplyResult {
