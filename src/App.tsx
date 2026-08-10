@@ -197,7 +197,7 @@ export default function App() {
       setEdits({});
       setExpanded(null);
       setNotice(
-        `Rewrote ${res.rewrittenCount} commit${res.rewrittenCount === 1 ? "" : "s"}. ` +
+        `🔪 Stabbed ${res.rewrittenCount} commit${res.rewrittenCount === 1 ? "" : "s"}. ` +
           `New HEAD ${res.newHead.slice(0, 8)} · backup ${res.backupRef}` +
           (sign ? " · signed with a git-knife note" : "")
       );
@@ -310,11 +310,11 @@ export default function App() {
       <main className="content">
         {!repo ? (
           <div className="empty">
-            <h1>Edit any commit — message, dates, author.</h1>
+            <h1>Stab your git history into shape 🔪</h1>
             <p className="muted">
-              Open a git repository to see its commits. Click a commit to edit its
-              message, author/committer name, email, and dates, then apply. Every
-              rewrite is backed up first and never changes file contents.
+              Open a repository, pick a commit, and rewrite its message, author,
+              and dates — cleanly. Every stab is backed up first and never touches
+              your files, only the metadata.
             </p>
           </div>
         ) : (

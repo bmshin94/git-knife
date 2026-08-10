@@ -1,7 +1,10 @@
 # git-knife 🔪
 
+*Stab your git history into shape — every commit's message, author, and dates,
+edited like a table.*
+
 A clean desktop GUI for editing git commit metadata directly — **message,
-author date, committer date, author name/email** — like editing a table.
+author date, committer date, author name/email**.
 
 Existing GUIs (GitKraken, Sublime Merge, Fork, lazygit) reword and reorder well
 but treat commit **dates** as effectively immutable and don't expose committer
