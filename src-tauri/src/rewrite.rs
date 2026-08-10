@@ -218,7 +218,7 @@ const NOTES_REF: &str = "refs/notes/git-knife";
 /// result so a notes failure never fails the rewrite itself.
 fn add_signature(repo: &str, commit: &str, count: u32) -> Result<(), String> {
     let msg = format!(
-        "Rewritten with git-knife 🔪 ({count} commit{}).\n\
+        "Stabbed with git-knife 🔪 ({count} commit{} re-authored).\n\
          https://github.com/TheRealYT/git-knife",
         if count == 1 { "" } else { "s" }
     );
