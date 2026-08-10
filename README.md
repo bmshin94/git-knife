@@ -17,6 +17,7 @@ contents are provably never changed**.
 
 - ✅ Open a repo, list commits on the current branch
 - ✅ Edit message / author name+email / author date / committer date / committer name+email
+- ✅ Bulk find & replace across those text fields, literal or regex (great for fixing a wrong email everywhere)
 - ✅ Preview every change before applying
 - ✅ Automatic backup ref before each rewrite + one-click restore
 - ✅ Warns when a rewrite would touch already-pushed history
@@ -62,6 +63,23 @@ pnpm tauri build
 
 git-knife rewrites **only your local branch**. It never contacts a remote and
 never pushes for you — pushing is always your explicit step.
+
+### Bulk find & replace
+
+Click **Bulk find & replace** above the commit table to change text across many
+commits at once:
+
+- Pick which fields to target (message, author/committer name, author/committer
+  email — any combination).
+- Enter **Find** / **Replace**. Toggle **Regex** for pattern matching with `$1`
+  backreferences, or leave it off for a literal search. **Case-sensitive** is on
+  by default.
+- The panel live-counts matching commits and replacements. Click **Stage edits**
+  to turn them into highlighted rows, then **Review & apply** as usual.
+
+Example — move every commit from an old email to a new one: target *Author
+email* + *Committer email*, find `old@example.com`, replace `new@example.com`.
+Merge commits are skipped, and successive passes compose.
 
 ### Push a rewrite
 

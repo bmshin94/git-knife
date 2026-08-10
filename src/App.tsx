@@ -9,9 +9,16 @@ import {
   restoreBackup,
 } from "./api";
 import type { Backup, Commit, CommitEdit, FieldChange, RepoInfo } from "./types";
-import CommitTable, { type EditableField } from "./components/CommitTable";
+import CommitTable, { type EditableField, fullMessage } from "./components/CommitTable";
 import ApplyBar, { ConfirmDialog } from "./components/ApplyBar";
 import BackupPanel from "./components/BackupPanel";
+import BulkPanel from "./components/BulkPanel";
+import {
+  computeBulk,
+  emptyBulkSpec,
+  type BulkField,
+  type BulkSpec,
+} from "./bulk";
 
 const LIMIT = 200;
 
@@ -26,8 +33,22 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulk, setBulk] = useState<BulkSpec>(emptyBulkSpec);
 
   const dirtyCount = Object.keys(edits).length;
+
+  const commitByHash = useMemo(() => {
+    const m: Record<string, Commit> = {};
+    commits.forEach((c) => (m[c.hash] = c));
+    return m;
+  }, [commits]);
+
+  // Live preview of the bulk find & replace against current commits + edits.
+  const bulkResult = useMemo(
+    () => computeBulk(commits, edits, bulk),
+    [commits, edits, bulk]
+  );
 
   // Commits are newest-first; the rewrite range spans from the oldest edited
   // commit up to the tip, so its length is (max dirty index + 1).
@@ -109,6 +130,38 @@ export default function App() {
 
   function toggle(hash: string) {
     setExpanded((cur) => (cur === hash ? null : hash));
+  }
+
+  // Merge the computed bulk result into the edit map, normalizing against each
+  // commit's original value so a replacement back to the original clears it.
+  function stageBulk() {
+    if (bulkResult.error || bulkResult.matchedCommits === 0) return;
+    setEdits((prev) => {
+      const next = { ...prev };
+      for (const [hash, fields] of Object.entries(bulkResult.edits)) {
+        const c = commitByHash[hash];
+        if (!c) continue;
+        const cur: CommitEdit = { ...(next[hash] ?? { hash }) };
+        for (const field of Object.keys(fields) as BulkField[]) {
+          const value = fields[field]!;
+          const original =
+            field === "message"
+              ? fullMessage(c)
+              : c[field as Exclude<BulkField, "message">];
+          if (value === original) delete cur[field];
+          else cur[field] = value;
+        }
+        const hasEdits = Object.keys(cur).some((k) => k !== "hash");
+        if (hasEdits) next[hash] = cur;
+        else delete next[hash];
+      }
+      return next;
+    });
+    setNotice(
+      `Staged ${bulkResult.replacements} replacement` +
+        `${bulkResult.replacements === 1 ? "" : "s"} across ${bulkResult.matchedCommits} ` +
+        `commit${bulkResult.matchedCommits === 1 ? "" : "s"}. Review the highlighted rows, then apply.`
+    );
   }
 
   async function startApply() {
@@ -245,19 +298,42 @@ export default function App() {
           </div>
         ) : (
           <div className="workspace">
-            <div className="table-wrap">
-              {commits.length === 0 ? (
-                <p className="muted">No commits found.</p>
-              ) : (
-                <CommitTable
-                  commits={commits}
-                  edits={edits}
-                  expanded={expanded}
-                  onToggle={toggle}
-                  onField={onField}
-                  onResetRow={resetRow}
+            <div className="left-col">
+              <div className="toolbar">
+                <button
+                  className={bulkOpen ? "primary" : "ghost"}
+                  onClick={() => setBulkOpen((o) => !o)}
+                >
+                  {bulkOpen ? "Close bulk edit" : "Bulk find & replace"}
+                </button>
+                <span className="muted small">{commits.length} commits loaded</span>
+              </div>
+
+              {bulkOpen && (
+                <BulkPanel
+                  spec={bulk}
+                  result={bulkResult}
+                  busy={busy}
+                  onChange={(patch) => setBulk((s) => ({ ...s, ...patch }))}
+                  onStage={stageBulk}
+                  onClose={() => setBulkOpen(false)}
                 />
               )}
+
+              <div className="table-wrap">
+                {commits.length === 0 ? (
+                  <p className="muted">No commits found.</p>
+                ) : (
+                  <CommitTable
+                    commits={commits}
+                    edits={edits}
+                    expanded={expanded}
+                    onToggle={toggle}
+                    onField={onField}
+                    onResetRow={resetRow}
+                  />
+                )}
+              </div>
             </div>
             <BackupPanel backups={backups} busy={busy} onRestore={restore} />
           </div>

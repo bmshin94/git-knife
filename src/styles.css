@@ -203,11 +203,89 @@ textarea {
   gap: 18px;
   align-items: start;
 }
+.left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .table-wrap {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 11px;
   overflow: hidden;
+}
+
+/* Bulk find & replace */
+.bulk {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bulk-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.bulk-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.chk input {
+  accent-color: var(--accent);
+}
+.bulk-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.bulk-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.bulk-row input {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.9rem;
+}
+.bulk-opts {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bulk-status {
+  margin-left: auto;
+  font-size: 0.88rem;
+}
+.bulk-status .ok {
+  color: var(--ok);
+}
+.bulk-status .err {
+  color: var(--danger);
+}
+.bulk-note {
+  margin: 0;
 }
 
 /* Commit table */
