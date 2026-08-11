@@ -3,6 +3,8 @@
 *Stab your git history into shape — every commit's message, author, and dates,
 edited like a table.*
 
+![git-knife screenshot](docs/screenshot.png)
+
 A clean desktop GUI for editing git commit metadata directly — **message,
 author date, committer date, author name/email**.
 
