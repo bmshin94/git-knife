@@ -30,8 +30,9 @@ fn apply_edits(
     path: String,
     edits: Vec<CommitEdit>,
     sign: bool,
+    resign: bool,
 ) -> Result<ApplyResult, String> {
-    rewrite::apply_edits(&path, &edits, sign)
+    rewrite::apply_edits(&path, &edits, sign, resign)
 }
 
 #[tauri::command]

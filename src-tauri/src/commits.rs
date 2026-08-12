@@ -5,12 +5,72 @@
 //! occur in commit metadata, so parsing is unambiguous even with multi-line
 //! bodies.
 
+use std::collections::HashSet;
+
 use serde::Serialize;
 
 use crate::git;
 
 const US: char = '\u{1f}'; // unit separator, between fields
 const RS: char = '\u{1e}'; // record separator, between commits
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    (0..=haystack.len() - needle.len()).find(|&i| &haystack[i..i + needle.len()] == needle)
+}
+
+/// Determine which of `hashes` are signed commits, by presence of a `gpgsig`
+/// header in the raw object — independent of whether the signature can be
+/// *verified* (SSH signatures report as unsigned via `%G?` without an
+/// allowedSignersFile, so we must not rely on verification here).
+///
+/// Uses a single `git cat-file --batch` pass, framed by the byte sizes it
+/// reports, so it is correct for arbitrary (multi-byte) commit content.
+pub fn signed_set(repo: &str, hashes: &[String]) -> HashSet<String> {
+    let mut signed = HashSet::new();
+    if hashes.is_empty() {
+        return signed;
+    }
+    let stdin = format!("{}\n", hashes.join("\n"));
+    let out = match git::run_bytes(repo, &["cat-file", "--batch"], Some(&stdin)) {
+        Ok(o) => o,
+        Err(_) => return signed,
+    };
+
+    let mut i = 0;
+    while i < out.len() {
+        // Header line: "<sha> <type> <size>" or "<sha> missing".
+        let nl = match find_subslice(&out[i..], b"\n") {
+            Some(p) => i + p,
+            None => break,
+        };
+        let header = String::from_utf8_lossy(&out[i..nl]).to_string();
+        i = nl + 1;
+        let parts: Vec<&str> = header.split(' ').collect();
+        if parts.len() < 3 {
+            // "<sha> missing" — no content follows.
+            continue;
+        }
+        let sha = parts[0].to_string();
+        let size: usize = parts[2].trim().parse().unwrap_or(0);
+        if i + size > out.len() {
+            break;
+        }
+        let content = &out[i..i + size];
+        i += size + 1; // skip content + trailing newline
+
+        // The header block ends at the first blank line; a signature lives in
+        // a `gpgsig` header within it.
+        let hdr_end = find_subslice(content, b"\n\n").unwrap_or(content.len());
+        let headers = &content[..hdr_end];
+        if headers.starts_with(b"gpgsig ") || find_subslice(headers, b"\ngpgsig ").is_some() {
+            signed.insert(sha);
+        }
+    }
+    signed
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +102,9 @@ pub struct Commit {
     pub subject: String,
     pub body: String,
     pub is_merge: bool,
+    /// True if the commit carries a signature (GPG or SSH), regardless of
+    /// whether it can be verified here. Rewriting such a commit strips it.
+    pub signed: bool,
 }
 
 /// Validate a path is inside a git repo and return branch/HEAD/upstream info.
@@ -128,10 +191,19 @@ pub fn list_commits(repo: &str, limit: u32) -> Result<Vec<Commit>, String> {
             committer_name: f[5].to_string(),
             committer_email: f[6].to_string(),
             committer_date: f[7].to_string(),
+            signed: false, // filled in below
             subject: f[8].to_string(),
             body: f[9].to_string(),
             is_merge,
         });
     }
+
+    // Mark signed commits via raw-header scan (verification-independent).
+    let hashes: Vec<String> = commits.iter().map(|c| c.hash.clone()).collect();
+    let signed = signed_set(repo, &hashes);
+    for c in commits.iter_mut() {
+        c.signed = signed.contains(&c.hash);
+    }
+
     Ok(commits)
 }

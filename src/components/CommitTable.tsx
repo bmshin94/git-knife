@@ -67,6 +67,14 @@ export default function CommitTable({
                 <td className="col-hash">
                   <code>{c.hash.slice(0, 8)}</code>
                   {c.isMerge && <span className="badge">merge</span>}
+                  {c.signed && (
+                    <span
+                      className="badge signed"
+                      title="Signed commit — rewriting removes its signature unless you re-sign"
+                    >
+                      signed
+                    </span>
+                  )}
                   {dirty && <span className="dot" title="edited" />}
                 </td>
                 <td className="col-subject">{eff("message", origMsg).split("\n")[0]}</td>

@@ -351,6 +351,14 @@ table.commits th {
   padding: 1px 6px;
   border-radius: 20px;
 }
+.badge.signed {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+.resign-toggle {
+  margin-left: 4px;
+  font-size: 0.82rem;
+}
 .dot {
   display: inline-block;
   width: 7px;

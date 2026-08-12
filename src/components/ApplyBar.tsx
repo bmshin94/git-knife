@@ -4,6 +4,9 @@ interface Props {
   dirtyCount: number;
   rewriteCount: number; // commits that will be rebuilt (incl. descendants)
   pushedWarning: boolean;
+  signedCount: number; // signed commits inside the rewrite range
+  resign: boolean;
+  onToggleResign: (next: boolean) => void;
   busy: boolean;
   onApply: () => void;
   onDiscard: () => void;
@@ -14,6 +17,9 @@ export default function ApplyBar({
   dirtyCount,
   rewriteCount,
   pushedWarning,
+  signedCount,
+  resign,
+  onToggleResign,
   busy,
   onApply,
   onDiscard,
@@ -31,6 +37,24 @@ export default function ApplyBar({
           <span className="warn" title="Some of these commits appear to be pushed">
             ⚠ rewrites pushed history
           </span>
+        )}
+        {signedCount > 0 && (
+          <span className="warn" title="Rewriting strips GPG/SSH signatures">
+            ⚠ {signedCount} signed
+          </span>
+        )}
+        {signedCount > 0 && (
+          <label
+            className="chk resign-toggle"
+            title="Re-sign the rebuilt commits with your configured key (user.signingkey / gpg.format)"
+          >
+            <input
+              type="checkbox"
+              checked={resign}
+              onChange={(e) => onToggleResign(e.target.checked)}
+            />
+            re-sign
+          </label>
         )}
       </div>
       <div className="applybar-actions">

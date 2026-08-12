@@ -16,8 +16,12 @@ export const listCommits = (path: string, limit: number) =>
 export const previewEdits = (path: string, edits: CommitEdit[]) =>
   invoke<FieldChange[]>("preview_edits", { path, edits });
 
-export const applyEdits = (path: string, edits: CommitEdit[], sign: boolean) =>
-  invoke<ApplyResult>("apply_edits", { path, edits, sign });
+export const applyEdits = (
+  path: string,
+  edits: CommitEdit[],
+  sign: boolean,
+  resign: boolean
+) => invoke<ApplyResult>("apply_edits", { path, edits, sign, resign });
 
 export const listBackups = (path: string) =>
   invoke<Backup[]>("list_backups", { path });

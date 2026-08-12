@@ -45,6 +45,16 @@ export default function App() {
     localStorage.setItem("knife.sign", next ? "1" : "0");
   }
 
+  // Re-sign rebuilt commits that were signed (opt-in, persisted).
+  const [resign, setResign] = useState<boolean>(
+    () => localStorage.getItem("knife.resign") === "1"
+  );
+
+  function toggleResign(next: boolean) {
+    setResign(next);
+    localStorage.setItem("knife.resign", next ? "1" : "0");
+  }
+
   const dirtyCount = Object.keys(edits).length;
 
   const commitByHash = useMemo(() => {
@@ -71,6 +81,13 @@ export default function App() {
 
   const pushedWarning =
     repo?.aheadOfUpstream != null && rewriteCount > repo.aheadOfUpstream;
+
+  // Signed commits inside the rewrite range (indices 0..rewriteCount) lose
+  // their signature unless re-signed.
+  const signedInRange = useMemo(
+    () => commits.slice(0, rewriteCount).filter((c) => c.signed).length,
+    [commits, rewriteCount]
+  );
 
   async function reload(path: string) {
     const [cs, bs] = await Promise.all([listCommits(path, LIMIT), listBackups(path)]);
@@ -192,7 +209,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const res = await applyEdits(repo.path, Object.values(edits), sign);
+      const res = await applyEdits(repo.path, Object.values(edits), sign, resign);
       setConfirm(null);
       setEdits({});
       setExpanded(null);
@@ -365,6 +382,9 @@ export default function App() {
         dirtyCount={dirtyCount}
         rewriteCount={rewriteCount}
         pushedWarning={!!pushedWarning}
+        signedCount={signedInRange}
+        resign={resign}
+        onToggleResign={toggleResign}
         busy={busy}
         onApply={startApply}
         onDiscard={() => setEdits({})}

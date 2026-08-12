@@ -5,6 +5,44 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+/// Like [`run`] but returns raw stdout bytes — needed when output is framed by
+/// byte counts (e.g. `git cat-file --batch`) or may not be valid UTF-8.
+pub fn run_bytes(
+    repo: &str,
+    args: &[&str],
+    stdin: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(repo).args(args);
+    cmd.env("GIT_TERMINAL_PROMPT", "0").env("LC_ALL", "C");
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.stdin(if stdin.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("failed to launch git: {e}"))?;
+    if let Some(data) = stdin {
+        let mut sink = child
+            .stdin
+            .take()
+            .ok_or_else(|| "failed to open git stdin".to_string())?;
+        sink.write_all(data.as_bytes())
+            .map_err(|e| format!("failed to write to git stdin: {e}"))?;
+    }
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("failed to wait for git: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(out.stdout)
+}
+
 /// Run `git -C <repo> <args...>`.
 ///
 /// * `env`   — extra environment variables (used to drive `commit-tree`).

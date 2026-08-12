@@ -72,6 +72,7 @@ struct RawCommit {
     committer_email: String,
     committer_date: String,
     message: String, // %B, the raw message
+    signed: bool,    // had a signature before the rewrite
 }
 
 /// Read the linear chain from `head`, newest first, including tree + raw message.
@@ -102,9 +103,18 @@ fn read_chain(repo: &str, head: &str) -> Result<Vec<RawCommit>, String> {
             committer_name: f[6].to_string(),
             committer_email: f[7].to_string(),
             committer_date: f[8].to_string(),
+            signed: false, // filled in below
             message: f[9].to_string(),
         });
     }
+
+    // Verification-independent signature detection.
+    let hashes: Vec<String> = chain.iter().map(|c| c.hash.clone()).collect();
+    let signed = commits::signed_set(repo, &hashes);
+    for c in chain.iter_mut() {
+        c.signed = signed.contains(&c.hash);
+    }
+
     Ok(chain)
 }
 
@@ -117,6 +127,10 @@ fn pick(edit: Option<&Option<String>>, original: &str) -> String {
 }
 
 /// Build a single commit via `git commit-tree`, reusing `tree`.
+///
+/// When `sign` is set, the commit is signed with the user's configured key
+/// (`user.signingkey` / `gpg.format`), preserving a previously-signed commit.
+#[allow(clippy::too_many_arguments)]
 fn commit_tree(
     repo: &str,
     tree: &str,
@@ -128,8 +142,13 @@ fn commit_tree(
     committer_email: &str,
     committer_date: &str,
     message: &str,
+    sign: bool,
 ) -> Result<String, String> {
-    let mut args: Vec<&str> = vec!["commit-tree", tree];
+    let mut args: Vec<&str> = vec!["commit-tree"];
+    if sign {
+        args.push("-S");
+    }
+    args.push(tree);
     if let Some(p) = parent {
         args.push("-p");
         args.push(p);
@@ -240,8 +259,16 @@ fn add_signature(repo: &str, commit: &str, count: u32) -> Result<(), String> {
 }
 
 /// Apply edits: rebuild the chain, save a backup ref, then move the branch.
-/// When `sign` is set, a transparent signature note is attached to the new tip.
-pub fn apply_edits(path: &str, edits: &[CommitEdit], sign: bool) -> Result<ApplyResult, String> {
+///
+/// * `sign`   — attach a transparent git-knife signature note to the new tip.
+/// * `resign` — re-sign rebuilt commits that were signed before, with the
+///   user's configured key (otherwise a rewrite silently drops signatures).
+pub fn apply_edits(
+    path: &str,
+    edits: &[CommitEdit],
+    sign: bool,
+    resign: bool,
+) -> Result<ApplyResult, String> {
     let info = commits::open_repo(path)?;
     let repo = info.path.as_str();
     let head = info.head.clone();
@@ -300,7 +327,19 @@ pub fn apply_edits(path: &str, edits: &[CommitEdit], sign: bool) -> Result<Apply
             &committer_email,
             &committer_date,
             &message,
-        )?;
+            resign && c.signed,
+        )
+        .map_err(|e| {
+            if resign && c.signed {
+                format!(
+                    "Failed to re-sign commit {} — is a signing key configured \
+                     (user.signingkey / gpg.format)? Underlying error: {e}",
+                    &c.hash[..c.hash.len().min(8)]
+                )
+            } else {
+                e
+            }
+        })?;
         new_parent = Some(nh.clone());
         new_head = nh;
     }

@@ -46,6 +46,7 @@ git-knife is the intersection: a clean GUI that edits every field, in bulk, safe
 - ✅ Preview every change before applying
 - ✅ Automatic backup ref before each rewrite + one-click restore
 - ✅ Warns when a rewrite would touch already-pushed history
+- ✅ Signed-commit aware — badges signed commits, warns a rewrite strips signatures, and can **re-sign** with your key
 - ✅ Merge commits are locked (not editable in this version)
 - ⛔ Not yet: reorder / squash / drop, merge rewriting, staging/branches/remotes
 
@@ -160,6 +161,19 @@ git reset --hard origin/<branch>   # discards local-only commits — coordinate 
 
   `git reflog` also lists the old tip. If you already force-pushed, restore
   locally and then `git push --force-with-lease` again.
+
+### Signed commits
+
+Rewriting a commit changes its hash, which **invalidates any GPG/SSH signature**
+on it (a raised concern on HN). git-knife detects signed commits by their raw
+`gpgsig` header — independent of verification, so it catches SSH signatures even
+without an `allowedSignersFile` — and:
+
+- **badges** them `signed` in the table,
+- **warns** in the apply bar how many signed commits a rewrite would strip,
+- offers a **re-sign** toggle that re-signs the rebuilt commits with your
+  configured key (`user.signingkey` / `gpg.format`). If re-signing is on but no
+  key is configured, the apply fails safely before touching any ref.
 
 ### Signature note (transparent)
 

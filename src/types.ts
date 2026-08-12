@@ -18,6 +18,7 @@ export interface Commit {
   subject: string;
   body: string;
   isMerge: boolean;
+  signed: boolean;
 }
 
 /** Overrides for a single commit. Fields left undefined are unchanged. */
