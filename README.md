@@ -40,7 +40,7 @@ git-knife is the intersection: a clean GUI that edits every field, in bulk, safe
 
 ## Status (MVP)
 
-- ✅ Open a repo, list commits on the current branch
+- ✅ Open a repo and pick **any local branch** to view/edit — by its ref, no checkout, so your working tree is never touched
 - ✅ Edit message / author name+email / author date / committer date / committer name+email
 - ✅ Bulk find & replace across those text fields, literal or regex (great for fixing a wrong email everywhere)
 - ✅ Preview every change before applying
@@ -95,7 +95,9 @@ up yet, so macOS/Windows builds are unsigned — fine for early testers.
 
 ### Edit a commit
 
-1. **Open** a repository (Browse… or paste the path).
+1. **Open** a repository (Browse… or paste the path), then pick a **branch**
+   from the dropdown — git-knife edits it by its ref, without checking it out,
+   so your working tree and current checkout stay exactly as they are.
 2. Click any **non-merge** commit to expand its editor.
 3. Change the message, author/committer name, email, or dates. Edited rows are
    highlighted; the date fields keep the commit's original UTC offset.

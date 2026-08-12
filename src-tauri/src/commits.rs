@@ -157,15 +157,68 @@ pub fn open_repo(path: &str) -> Result<RepoInfo, String> {
     })
 }
 
-/// List up to `limit` commits reachable from HEAD, newest first.
-pub fn list_commits(repo: &str, limit: u32) -> Result<Vec<Commit>, String> {
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Branch {
+    pub name: String,
+    pub is_head: bool,
+    pub head: String,
+    pub upstream: Option<String>,
+    pub ahead_of_upstream: Option<u32>,
+}
+
+/// List local branches with their tip, upstream, and unpushed count.
+pub fn list_branches(repo: &str) -> Result<Vec<Branch>, String> {
+    let fmt = format!(
+        "--format=%(refname:short){US}%(objectname){US}%(upstream:short){US}%(HEAD)"
+    );
+    let out = git::run(repo, &["for-each-ref", &fmt, "refs/heads"], &[], None)?;
+
+    let mut branches = Vec::new();
+    for line in out.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let f: Vec<&str> = line.split(US).collect();
+        if f.len() < 4 {
+            continue;
+        }
+        let name = f[0].to_string();
+        let upstream = if f[2].is_empty() {
+            None
+        } else {
+            Some(f[2].to_string())
+        };
+        let ahead_of_upstream = upstream.as_ref().and_then(|up| {
+            git::run(
+                repo,
+                &["rev-list", "--count", &format!("{up}..{name}")],
+                &[],
+                None,
+            )
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+        });
+        branches.push(Branch {
+            name,
+            is_head: f[3].trim() == "*",
+            head: f[1].to_string(),
+            upstream,
+            ahead_of_upstream,
+        });
+    }
+    Ok(branches)
+}
+
+/// List up to `limit` commits reachable from `branch`, newest first.
+pub fn list_commits(repo: &str, branch: &str, limit: u32) -> Result<Vec<Commit>, String> {
     let limit = limit.max(1);
     let fmt = format!(
         "--format=%H{US}%P{US}%an{US}%ae{US}%aI{US}%cn{US}%ce{US}%cI{US}%s{US}%b{RS}"
     );
     let out = git::run(
         repo,
-        &["log", &format!("-{limit}"), &fmt],
+        &["log", &format!("-{limit}"), &fmt, branch],
         &[],
         None,
     )?;

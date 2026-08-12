@@ -184,9 +184,16 @@ fn oldest_edited_index(chain: &[RawCommit], edits: &HashMap<&str, &CommitEdit>) 
 }
 
 /// Compute the old→new field changes without touching the repository.
-pub fn preview_edits(path: &str, edits: &[CommitEdit]) -> Result<Vec<FieldChange>, String> {
+pub fn preview_edits(
+    path: &str,
+    branch: &str,
+    edits: &[CommitEdit],
+) -> Result<Vec<FieldChange>, String> {
     let info = commits::open_repo(path)?;
-    let chain = read_chain(&info.path, &info.head)?;
+    let tip = git::run(&info.path, &["rev-parse", branch], &[], None)?
+        .trim()
+        .to_string();
+    let chain = read_chain(&info.path, &tip)?;
     let by_hash: HashMap<&str, &RawCommit> = chain.iter().map(|c| (c.hash.as_str(), c)).collect();
 
     let mut changes = Vec::new();
@@ -265,14 +272,17 @@ fn add_signature(repo: &str, commit: &str, count: u32) -> Result<(), String> {
 ///   user's configured key (otherwise a rewrite silently drops signatures).
 pub fn apply_edits(
     path: &str,
+    branch: &str,
     edits: &[CommitEdit],
     sign: bool,
     resign: bool,
 ) -> Result<ApplyResult, String> {
     let info = commits::open_repo(path)?;
     let repo = info.path.as_str();
-    let head = info.head.clone();
-    let branch = info.branch.clone();
+    // Resolve the tip of the *selected* branch (not necessarily HEAD).
+    let head = git::run(repo, &["rev-parse", branch], &[], None)?
+        .trim()
+        .to_string();
 
     let chain = read_chain(repo, &head)?;
     let edit_map: HashMap<&str, &CommitEdit> =
@@ -352,7 +362,10 @@ pub fn apply_edits(
     let backup_ref = format!("refs/knife-backup/{branch}/{ts}");
     git::run(repo, &["update-ref", &backup_ref, &head], &[], None)?;
 
-    // Move the branch (or detached HEAD) with a compare-and-swap on the old tip.
+    // Move the branch ref with a compare-and-swap on the old tip. Editing a
+    // branch by its ref never touches the working tree; when it happens to be
+    // the checked-out branch, HEAD follows and the tree stays consistent
+    // because the tip's tree is unchanged.
     if branch == "HEAD" {
         git::run(
             repo,

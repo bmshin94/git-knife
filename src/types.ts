@@ -6,6 +6,14 @@ export interface RepoInfo {
   aheadOfUpstream: number | null;
 }
 
+export interface Branch {
+  name: string;
+  isHead: boolean;
+  head: string;
+  upstream: string | null;
+  aheadOfUpstream: number | null;
+}
+
 export interface Commit {
   hash: string;
   parents: string[];

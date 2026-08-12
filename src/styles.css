@@ -172,6 +172,11 @@ textarea {
   margin-left: auto;
   font-size: 0.85rem;
 }
+.branch-select {
+  padding: 3px 8px;
+  font-weight: 600;
+  max-width: 260px;
+}
 
 .banner {
   padding: 9px 18px;

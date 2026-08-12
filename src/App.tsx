@@ -3,12 +3,20 @@ import { open as openDialog, ask } from "@tauri-apps/plugin-dialog";
 import {
   applyEdits,
   listBackups,
+  listBranches,
   listCommits,
   openRepo,
   previewEdits,
   restoreBackup,
 } from "./api";
-import type { Backup, Commit, CommitEdit, FieldChange, RepoInfo } from "./types";
+import type {
+  Backup,
+  Branch,
+  Commit,
+  CommitEdit,
+  FieldChange,
+  RepoInfo,
+} from "./types";
 import CommitTable, { type EditableField, fullMessage } from "./components/CommitTable";
 import ApplyBar, { ConfirmDialog } from "./components/ApplyBar";
 import BackupPanel from "./components/BackupPanel";
@@ -25,6 +33,8 @@ const LIMIT = 200;
 export default function App() {
   const [pathInput, setPathInput] = useState("");
   const [repo, setRepo] = useState<RepoInfo | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branch, setBranch] = useState<string>("");
   const [commits, setCommits] = useState<Commit[]>([]);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [edits, setEdits] = useState<Record<string, CommitEdit>>({});
@@ -63,6 +73,8 @@ export default function App() {
     return m;
   }, [commits]);
 
+  const selectedBranch = branches.find((b) => b.name === branch) ?? null;
+
   // Live preview of the bulk find & replace against current commits + edits.
   const bulkResult = useMemo(
     () => computeBulk(commits, edits, bulk),
@@ -80,7 +92,8 @@ export default function App() {
   }, [commits, edits]);
 
   const pushedWarning =
-    repo?.aheadOfUpstream != null && rewriteCount > repo.aheadOfUpstream;
+    selectedBranch?.aheadOfUpstream != null &&
+    rewriteCount > selectedBranch.aheadOfUpstream;
 
   // Signed commits inside the rewrite range (indices 0..rewriteCount) lose
   // their signature unless re-signed.
@@ -89,8 +102,11 @@ export default function App() {
     [commits, rewriteCount]
   );
 
-  async function reload(path: string) {
-    const [cs, bs] = await Promise.all([listCommits(path, LIMIT), listBackups(path)]);
+  async function reload(path: string, branchName: string) {
+    const [cs, bs] = await Promise.all([
+      listCommits(path, branchName, LIMIT),
+      listBackups(path),
+    ]);
     setCommits(cs);
     setBackups(bs);
   }
@@ -102,15 +118,40 @@ export default function App() {
     setNotice(null);
     try {
       const info = await openRepo(path.trim());
+      const brs = await listBranches(info.path);
+      const initial =
+        brs.find((b) => b.name === info.branch)?.name ??
+        brs.find((b) => b.isHead)?.name ??
+        brs[0]?.name ??
+        info.branch;
       setRepo(info);
       setPathInput(info.path);
+      setBranches(brs);
+      setBranch(initial);
       setEdits({});
       setExpanded(null);
-      await reload(info.path);
+      await reload(info.path, initial);
     } catch (e) {
       setRepo(null);
+      setBranches([]);
       setCommits([]);
       setBackups([]);
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function selectBranch(name: string) {
+    if (!repo || name === branch) return;
+    setBranch(name);
+    setEdits({});
+    setExpanded(null);
+    setBusy(true);
+    setError(null);
+    try {
+      await reload(repo.path, name);
+    } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
@@ -195,7 +236,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const changes = await previewEdits(repo.path, Object.values(edits));
+      const changes = await previewEdits(repo.path, branch, Object.values(edits));
       setConfirm(changes);
     } catch (e) {
       setError(String(e));
@@ -209,18 +250,19 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const res = await applyEdits(repo.path, Object.values(edits), sign, resign);
+      const res = await applyEdits(repo.path, branch, Object.values(edits), sign, resign);
       setConfirm(null);
       setEdits({});
       setExpanded(null);
       setNotice(
-        `🔪 Stabbed ${res.rewrittenCount} commit${res.rewrittenCount === 1 ? "" : "s"}. ` +
-          `New HEAD ${res.newHead.slice(0, 8)} · backup ${res.backupRef}` +
+        `🔪 Stabbed ${res.rewrittenCount} commit${res.rewrittenCount === 1 ? "" : "s"} on ${branch}. ` +
+          `New tip ${res.newHead.slice(0, 8)} · backup ${res.backupRef}` +
           (sign ? " · signed with a git-knife note" : "")
       );
       const info = await openRepo(repo.path);
       setRepo(info);
-      await reload(info.path);
+      setBranches(await listBranches(info.path));
+      await reload(info.path, branch);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -245,7 +287,8 @@ export default function App() {
       setNotice("Restored from backup.");
       const info = await openRepo(repo.path);
       setRepo(info);
-      await reload(info.path);
+      setBranches(await listBranches(info.path));
+      await reload(info.path, branch);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -281,18 +324,32 @@ export default function App() {
       {repo && (
         <div className="repo-info">
           <span>
-            <span className="muted">branch</span> <strong>{repo.branch}</strong>
+            <span className="muted">branch</span>{" "}
+            <select
+              className="branch-select"
+              value={branch}
+              disabled={busy || branches.length === 0}
+              onChange={(e) => selectBranch(e.target.value)}
+            >
+              {branches.map((b) => (
+                <option key={b.name} value={b.name}>
+                  {b.name}
+                  {b.isHead ? " ✓" : ""}
+                </option>
+              ))}
+            </select>
           </span>
           <span>
-            <span className="muted">HEAD</span> <code>{repo.head.slice(0, 8)}</code>
+            <span className="muted">tip</span>{" "}
+            <code>{(selectedBranch?.head ?? repo.head).slice(0, 8)}</code>
           </span>
           <span>
             <span className="muted">upstream</span>{" "}
-            {repo.upstream ? (
+            {selectedBranch?.upstream ? (
               <>
-                <code>{repo.upstream}</code>
-                {repo.aheadOfUpstream != null && (
-                  <span className="muted"> ({repo.aheadOfUpstream} ahead)</span>
+                <code>{selectedBranch.upstream}</code>
+                {selectedBranch.aheadOfUpstream != null && (
+                  <span className="muted"> ({selectedBranch.aheadOfUpstream} ahead)</span>
                 )}
               </>
             ) : (

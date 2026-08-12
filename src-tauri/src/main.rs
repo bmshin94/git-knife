@@ -7,7 +7,7 @@ mod git;
 mod rewrite;
 
 use backup::Backup;
-use commits::{Commit, RepoInfo};
+use commits::{Branch, Commit, RepoInfo};
 use rewrite::{ApplyResult, CommitEdit, FieldChange};
 
 #[tauri::command]
@@ -16,23 +16,33 @@ fn open_repo(path: String) -> Result<RepoInfo, String> {
 }
 
 #[tauri::command]
-fn list_commits(path: String, limit: u32) -> Result<Vec<Commit>, String> {
-    commits::list_commits(&path, limit)
+fn list_branches(path: String) -> Result<Vec<Branch>, String> {
+    commits::list_branches(&path)
 }
 
 #[tauri::command]
-fn preview_edits(path: String, edits: Vec<CommitEdit>) -> Result<Vec<FieldChange>, String> {
-    rewrite::preview_edits(&path, &edits)
+fn list_commits(path: String, branch: String, limit: u32) -> Result<Vec<Commit>, String> {
+    commits::list_commits(&path, &branch, limit)
+}
+
+#[tauri::command]
+fn preview_edits(
+    path: String,
+    branch: String,
+    edits: Vec<CommitEdit>,
+) -> Result<Vec<FieldChange>, String> {
+    rewrite::preview_edits(&path, &branch, &edits)
 }
 
 #[tauri::command]
 fn apply_edits(
     path: String,
+    branch: String,
     edits: Vec<CommitEdit>,
     sign: bool,
     resign: bool,
 ) -> Result<ApplyResult, String> {
-    rewrite::apply_edits(&path, &edits, sign, resign)
+    rewrite::apply_edits(&path, &branch, &edits, sign, resign)
 }
 
 #[tauri::command]
@@ -50,6 +60,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             open_repo,
+            list_branches,
             list_commits,
             preview_edits,
             apply_edits,

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ApplyResult,
   Backup,
+  Branch,
   Commit,
   CommitEdit,
   FieldChange,
@@ -10,18 +11,22 @@ import type {
 
 export const openRepo = (path: string) => invoke<RepoInfo>("open_repo", { path });
 
-export const listCommits = (path: string, limit: number) =>
-  invoke<Commit[]>("list_commits", { path, limit });
+export const listBranches = (path: string) =>
+  invoke<Branch[]>("list_branches", { path });
 
-export const previewEdits = (path: string, edits: CommitEdit[]) =>
-  invoke<FieldChange[]>("preview_edits", { path, edits });
+export const listCommits = (path: string, branch: string, limit: number) =>
+  invoke<Commit[]>("list_commits", { path, branch, limit });
+
+export const previewEdits = (path: string, branch: string, edits: CommitEdit[]) =>
+  invoke<FieldChange[]>("preview_edits", { path, branch, edits });
 
 export const applyEdits = (
   path: string,
+  branch: string,
   edits: CommitEdit[],
   sign: boolean,
   resign: boolean
-) => invoke<ApplyResult>("apply_edits", { path, edits, sign, resign });
+) => invoke<ApplyResult>("apply_edits", { path, branch, edits, sign, resign });
 
 export const listBackups = (path: string) =>
   invoke<Backup[]>("list_backups", { path });

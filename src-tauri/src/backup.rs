@@ -77,7 +77,9 @@ pub fn list_backups(path: &str) -> Result<Vec<Backup>, String> {
     Ok(backups)
 }
 
-/// Restore the working branch to a backup ref via `git reset --hard`.
+/// Restore a backup. The branch is parsed from the backup ref name. If it is
+/// the currently checked-out branch we `git reset --hard` (updating the working
+/// tree); otherwise we just move that branch's ref, leaving the checkout alone.
 pub fn restore_backup(path: &str, ref_name: &str) -> Result<(), String> {
     if !ref_name.starts_with("refs/knife-backup/") {
         return Err("Refusing to restore a ref outside refs/knife-backup/.".to_string());
@@ -88,6 +90,22 @@ pub fn restore_backup(path: &str, ref_name: &str) -> Result<(), String> {
     let target = git::run(repo, &["rev-parse", ref_name], &[], None)?
         .trim()
         .to_string();
-    git::run(repo, &["reset", "--hard", &target], &[], None)?;
+
+    // refs/knife-backup/<branch>/<ts> — branch may contain slashes.
+    let rest = ref_name.strip_prefix("refs/knife-backup/").unwrap_or("");
+    let branch = rest.rsplit_once('/').map(|(b, _)| b).unwrap_or("");
+
+    if branch.is_empty() {
+        return Err("Could not determine the branch for this backup.".to_string());
+    }
+
+    if branch == info.branch {
+        // Checked-out branch: move ref + working tree together.
+        git::run(repo, &["reset", "--hard", &target], &[], None)?;
+    } else {
+        // Other branch: move its ref only, don't disturb the checkout.
+        let refname = format!("refs/heads/{branch}");
+        git::run(repo, &["update-ref", &refname, &target], &[], None)?;
+    }
     Ok(())
 }
