@@ -10,7 +10,7 @@
 //! MVP scope: linear history only. If a merge commit falls inside the rewrite
 //! range we refuse rather than silently mangle it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -75,12 +75,15 @@ struct RawCommit {
     signed: bool,    // had a signature before the rewrite
 }
 
-/// Read the linear chain from `head`, newest first, including tree + raw message.
+/// Read the full ancestry of `head` in topological order (a parent never
+/// appears before its children), newest first, including tree + raw message.
+/// Reversing the result yields parents-before-children, which the DAG rebuild
+/// relies on.
 fn read_chain(repo: &str, head: &str) -> Result<Vec<RawCommit>, String> {
     let fmt = format!(
         "--format=%H{US}%T{US}%P{US}%an{US}%ae{US}%aI{US}%cn{US}%ce{US}%cI{US}%B{RS}"
     );
-    let out = git::run(repo, &["log", &fmt, head], &[], None)?;
+    let out = git::run(repo, &["log", "--topo-order", &fmt, head], &[], None)?;
 
     let mut chain = Vec::new();
     for record in out.split(RS) {
@@ -126,7 +129,9 @@ fn pick(edit: Option<&Option<String>>, original: &str) -> String {
     }
 }
 
-/// Build a single commit via `git commit-tree`, reusing `tree`.
+/// Build a single commit via `git commit-tree`, reusing `tree` and attaching
+/// `parents` in order (0 = root, 1 = normal, 2+ = merge). Preserving every
+/// parent is what makes merge commits rebuild correctly.
 ///
 /// When `sign` is set, the commit is signed with the user's configured key
 /// (`user.signingkey` / `gpg.format`), preserving a previously-signed commit.
@@ -134,7 +139,7 @@ fn pick(edit: Option<&Option<String>>, original: &str) -> String {
 fn commit_tree(
     repo: &str,
     tree: &str,
-    parent: Option<&str>,
+    parents: &[String],
     author_name: &str,
     author_email: &str,
     author_date: &str,
@@ -144,14 +149,14 @@ fn commit_tree(
     message: &str,
     sign: bool,
 ) -> Result<String, String> {
-    let mut args: Vec<&str> = vec!["commit-tree"];
+    let mut args: Vec<String> = vec!["commit-tree".to_string()];
     if sign {
-        args.push("-S");
+        args.push("-S".to_string());
     }
-    args.push(tree);
-    if let Some(p) = parent {
-        args.push("-p");
-        args.push(p);
+    args.push(tree.to_string());
+    for p in parents {
+        args.push("-p".to_string());
+        args.push(p.clone());
     }
 
     let env = [
@@ -168,19 +173,9 @@ fn commit_tree(
         msg.push('\n');
     }
 
-    let out = git::run(repo, &args, &env, Some(&msg))?;
+    let argrefs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = git::run(repo, &argrefs, &env, Some(&msg))?;
     Ok(out.trim().to_string())
-}
-
-/// Locate the oldest edited commit (largest index in a newest-first chain).
-fn oldest_edited_index(chain: &[RawCommit], edits: &HashMap<&str, &CommitEdit>) -> Option<usize> {
-    let mut idx = None;
-    for (i, c) in chain.iter().enumerate() {
-        if edits.contains_key(c.hash.as_str()) {
-            idx = Some(i);
-        }
-    }
-    idx
 }
 
 /// Compute the old→new field changes without touching the repository.
@@ -288,31 +283,29 @@ pub fn apply_edits(
     let edit_map: HashMap<&str, &CommitEdit> =
         edits.iter().map(|e| (e.hash.as_str(), e)).collect();
 
-    let oldest = match oldest_edited_index(&chain, &edit_map) {
-        Some(i) => i,
-        None => return Err("Nothing to apply — no edited commits found.".to_string()),
-    };
-
-    // Everything from the oldest edited commit up to the tip will be rebuilt.
-    // Refuse if any of those is a merge.
-    for c in &chain[0..=oldest] {
-        if c.parents.len() > 1 {
-            return Err(format!(
-                "Commit {} in the rewrite range is a merge commit; \
-                 editing across merges is not supported yet.",
-                &c.hash[..c.hash.len().min(8)]
-            ));
+    // A commit must be rebuilt if it is edited or descends from an edited
+    // commit. Processing oldest→newest (chain is topo-ordered newest-first, so
+    // iterate reversed), a commit needs rebuilding when it is edited or any of
+    // its parents already does. This naturally spans merges and side branches.
+    let mut rewrite: HashSet<String> = HashSet::new();
+    for c in chain.iter().rev() {
+        let edited = edit_map.contains_key(c.hash.as_str());
+        let parent_rebuilt = c.parents.iter().any(|p| rewrite.contains(p));
+        if edited || parent_rebuilt {
+            rewrite.insert(c.hash.clone());
         }
     }
+    if rewrite.is_empty() {
+        return Err("Nothing to apply — edited commits not found in this history.".to_string());
+    }
 
-    // The parent of the oldest rebuilt commit is its original parent (unchanged),
-    // or None if it is a root commit.
-    let mut new_parent: Option<String> = chain[oldest].parents.first().cloned();
-
-    // Rebuild oldest → newest (reverse of the newest-first chain slice).
-    let mut new_head = String::new();
-    for i in (0..=oldest).rev() {
-        let c = &chain[i];
+    // Rebuild every commit in the set, oldest first, mapping each original
+    // parent to its rewritten hash (or keeping it if that ancestor is untouched).
+    let mut map: HashMap<String, String> = HashMap::new();
+    for c in chain.iter().rev() {
+        if !rewrite.contains(&c.hash) {
+            continue;
+        }
         let e = edit_map.get(c.hash.as_str()).copied();
 
         let author_name = pick(e.map(|e| &e.author_name), &c.author_name);
@@ -326,10 +319,16 @@ pub fn apply_edits(
             _ => c.message.clone(),
         };
 
+        let new_parents: Vec<String> = c
+            .parents
+            .iter()
+            .map(|p| map.get(p).cloned().unwrap_or_else(|| p.clone()))
+            .collect();
+
         let nh = commit_tree(
             repo,
             &c.tree,
-            new_parent.as_deref(),
+            &new_parents,
             &author_name,
             &author_email,
             &author_date,
@@ -339,20 +338,25 @@ pub fn apply_edits(
             &message,
             resign && c.signed,
         )
-        .map_err(|e| {
+        .map_err(|err| {
             if resign && c.signed {
                 format!(
                     "Failed to re-sign commit {} — is a signing key configured \
-                     (user.signingkey / gpg.format)? Underlying error: {e}",
+                     (user.signingkey / gpg.format)? Underlying error: {err}",
                     &c.hash[..c.hash.len().min(8)]
                 )
             } else {
-                e
+                err
             }
         })?;
-        new_parent = Some(nh.clone());
-        new_head = nh;
+        map.insert(c.hash.clone(), nh);
     }
+
+    let new_head = map
+        .get(&head)
+        .cloned()
+        .ok_or_else(|| "internal error: branch tip was not rebuilt".to_string())?;
+    let rewritten_count = rewrite.len() as u32;
 
     // Save a backup ref pointing at the old tip before moving anything.
     let ts = SystemTime::now()
@@ -380,12 +384,12 @@ pub fn apply_edits(
 
     // Optional, transparent signature note. Best-effort: never fail the rewrite.
     if sign {
-        let _ = add_signature(repo, &new_head, (oldest + 1) as u32);
+        let _ = add_signature(repo, &new_head, rewritten_count);
     }
 
     Ok(ApplyResult {
         new_head,
         backup_ref,
-        rewritten_count: (oldest + 1) as u32,
+        rewritten_count,
     })
 }

@@ -47,8 +47,8 @@ git-knife is the intersection: a clean GUI that edits every field, in bulk, safe
 - ✅ Automatic backup ref before each rewrite + one-click restore
 - ✅ Warns when a rewrite would touch already-pushed history
 - ✅ Signed-commit aware — badges signed commits, warns a rewrite strips signatures, and can **re-sign** with your key
-- ✅ Merge commits are locked (not editable in this version)
-- ⛔ Not yet: reorder / squash / drop, merge rewriting, staging/branches/remotes
+- ✅ Edit across merges — rebuilds the full commit graph, preserving each merge's parents
+- ⛔ Not yet: reorder / squash / drop, staging/branches/remotes
 
 ## Requirements
 
@@ -121,7 +121,7 @@ commits at once:
 
 Example — move every commit from an old email to a new one: target *Author
 email* + *Committer email*, find `old@example.com`, replace `new@example.com`.
-Merge commits are skipped, and successive passes compose.
+Merge commits are included, and successive passes compose.
 
 ### Push a rewrite
 
