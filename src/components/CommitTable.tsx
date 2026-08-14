@@ -61,8 +61,8 @@ export default function CommitTable({
                   (c.isMerge ? " merge" : "") +
                   (isOpen ? " open" : "")
                 }
-                onClick={() => !c.isMerge && onToggle(c.hash)}
-                title={c.isMerge ? "Merge commits can't be edited in this version" : ""}
+                onClick={() => onToggle(c.hash)}
+                title={c.isMerge ? "Merge commit — editing rebuilds it with both parents" : ""}
               >
                 <td className="col-hash">
                   <code>{c.hash.slice(0, 8)}</code>

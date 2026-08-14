@@ -332,8 +332,7 @@ table.commits th {
   background: var(--dirty);
   box-shadow: inset 3px 0 0 var(--dirty-border);
 }
-.commit-row.merge {
-  cursor: default;
+.commit-row.merge .col-subject {
   color: var(--muted);
 }
 .col-subject {

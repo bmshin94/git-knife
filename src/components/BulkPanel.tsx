@@ -111,7 +111,7 @@ export default function BulkPanel({
 
       <p className="muted small bulk-note">
         Staged edits appear as highlighted rows — review them in the table, then
-        use <strong>Review &amp; apply</strong>. Merge commits are skipped.
+        use <strong>Review &amp; apply</strong>.
       </p>
     </div>
   );

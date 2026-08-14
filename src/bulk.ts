@@ -61,7 +61,7 @@ export function effectiveValue(
 
 /**
  * Compute a bulk find & replace over the given commits, honoring any pending
- * edits so successive bulk passes compose. Merge commits are skipped. Pure — it
+ * edits so successive bulk passes compose. Merge commits are included. Pure — it
  * does not mutate anything; the caller merges `edits` into its edit state.
  */
 export function computeBulk(
@@ -90,7 +90,6 @@ export function computeBulk(
   const replacement = spec.regex ? spec.replace : spec.replace.replace(/\$/g, "$$$$");
 
   for (const c of commits) {
-    if (c.isMerge) continue;
     const changed: Partial<Record<BulkField, string>> = {};
     let count = 0;
 
